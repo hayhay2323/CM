@@ -18,7 +18,7 @@
     },
     {
       "name": "send_to_agent",
-      "description": "将消息发送到指定 agent 的 Terminal 输入框。消息会显示为 [from → to]: message 格式，让接收者知道消息来源",
+      "description": "将消息发送到一个或多个 agent 的 Terminal 输入框。支持单播和群播。消息会显示为 [from → to]: message 格式，让接收者知道消息来源和所有接收者",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -27,16 +27,24 @@
             "description": "发送者的名称（如 claude、codex、gemini 等）。如果不提供，默认显示为 'unknown'"
           },
           "agentName": {
-            "type": "string",
-            "description": "目标 agent 的名称（如 codex、gemini、qwen、iflow 等）"
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "单个目标 agent 的名称"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "多个目标 agent 的名称数组（群播）"
+              }
+            ],
+            "description": "目标 agent 的名称。可以是单个字符串（如 'codex'）用于单播，或字符串数组（如 ['codex', 'gemini', 'qwen']）用于群播"
           },
           "message": {
             "type": "string",
             "description": "要发送到 agent 输入框的消息内容"
-          },
-          "windowId": {
-            "type": "number",
-            "description": "可选：指定 Terminal 窗口 ID。如果不提供，将自动查找运行该 agent 的窗口"
           }
         },
         "required": ["agentName", "message"]

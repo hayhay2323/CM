@@ -212,29 +212,88 @@ tool_list_agent_terminals() {
     return 0
 }
 
+# Helper function: Send message to a single agent
+# Args: $1 = agent_name, $2 = from_agent, $3 = message, $4 = recipients_display
+send_to_single_agent() {
+    local agent_name="$1"
+    local from_agent="$2"
+    local message="$3"
+    local recipients_display="$4"
+
+    # Get all Terminal windows
+    local windows=$(get_terminal_windows)
+
+    if [ -z "$windows" ]; then
+        echo '{"success":false,"error":"No Terminal windows found"}'
+        return 1
+    fi
+
+    # Search for the agent window
+    local window_id=""
+    local found=false
+    while IFS='|' read -r wid wname tty; do
+        [ -z "$wid" ] && continue
+
+        # Check if this agent is running on this TTY
+        local process_info=$(check_agent_on_tty "$tty" "$agent_name")
+
+        if [ -n "$process_info" ]; then
+            window_id="$wid"
+            found=true
+            break
+        fi
+    done <<< "$windows"
+
+    if [ "$found" = false ]; then
+        echo "{\"success\":false,\"agent\":\"$agent_name\",\"error\":\"Agent not found\"}"
+        return 1
+    fi
+
+    # Format message with source and recipients information
+    local formatted_message="[${from_agent} → ${recipients_display}]: ${message}"
+
+    # Send the message to the Terminal window
+    local result=$(send_text_to_terminal "$window_id" "$formatted_message")
+
+    if echo "$result" | grep -q "success"; then
+        echo "{\"success\":true,\"agent\":\"$agent_name\",\"windowId\":$window_id}"
+        return 0
+    else
+        local error_msg=$(echo "$result" | sed 's/^error: //' | sed 's/"/\\"/g')
+        echo "{\"success\":false,\"agent\":\"$agent_name\",\"error\":\"$error_msg\"}"
+        return 1
+    fi
+}
+
 # Main tool function: send_to_agent
 # Args: $1 = JSON arguments from MCP client
 tool_send_to_agent() {
     local args="$1"
 
     # Parse arguments from JSON
-    local agent_name=""
+    local agent_name_raw=""
     local from_agent=""
     local message=""
-    local window_id=""
 
     if [ "$HAS_JQ" = true ]; then
-        agent_name=$(echo "$args" | jq -r '.agentName // ""')
         from_agent=$(echo "$args" | jq -r '.from // "unknown"')
         message=$(echo "$args" | jq -r '.message // ""')
-        window_id=$(echo "$args" | jq -r '.windowId // ""')
+
+        # Check if agentName is array or string
+        local is_array=$(echo "$args" | jq -r '.agentName | type')
+
+        if [ "$is_array" = "array" ]; then
+            agent_name_raw=$(echo "$args" | jq -r '.agentName | @json')
+        else
+            agent_name_raw=$(echo "$args" | jq -r '.agentName // ""')
+        fi
     else
         echo '{"success":false,"error":"jq is required for this tool"}'
         return 1
     fi
 
     # Validate required parameters
-    if [ -z "$agent_name" ] || [ "$agent_name" = "null" ]; then
+    if [ -z "$agent_name_raw" ] || [ "$agent_name_raw" = "null" ]; then
         echo '{"success":false,"error":"agentName is required"}'
         return 1
     fi
@@ -244,53 +303,55 @@ tool_send_to_agent() {
         return 1
     fi
 
-    # If windowId is not provided, find the window running the agent
-    if [ -z "$window_id" ] || [ "$window_id" = "null" ]; then
-        # Get all Terminal windows
-        local windows=$(get_terminal_windows)
+    # Handle array or single agent name
+    local agent_names=()
+    local recipients_display=""
 
-        if [ -z "$windows" ]; then
-            echo '{"success":false,"error":"No Terminal windows found"}'
-            return 1
-        fi
-
-        # Search for the agent window
-        local found=false
-        while IFS='|' read -r wid wname tty; do
-            [ -z "$wid" ] && continue
-
-            # Check if this agent is running on this TTY
-            local process_info=$(check_agent_on_tty "$tty" "$agent_name")
-
-            if [ -n "$process_info" ]; then
-                window_id="$wid"
-                found=true
-                break
-            fi
-        done <<< "$windows"
-
-        if [ "$found" = false ]; then
-            echo "{\"success\":false,\"error\":\"No Terminal window found running agent: $agent_name\"}"
-            return 1
-        fi
-    fi
-
-    # Format message with source information
-    local formatted_message="[${from_agent} → ${agent_name}]: ${message}"
-
-    # Send the message to the Terminal window
-    local result=$(send_text_to_terminal "$window_id" "$formatted_message")
-
-    if echo "$result" | grep -q "success"; then
-        echo "{\"success\":true,\"windowId\":$window_id,\"message\":\"Message sent to agent: $agent_name\"}"
-        return 0
+    if [[ "$agent_name_raw" == "["* ]]; then
+        # Array of agents (group chat)
+        mapfile -t agent_names < <(echo "$agent_name_raw" | jq -r '.[]')
+        recipients_display=$(echo "$agent_name_raw" | jq -r 'join(",")')
     else
-        # Extract error message
-        local error_msg=$(echo "$result" | sed 's/^error: //')
-        error_msg=$(echo "$error_msg" | sed 's/"/\\"/g')
-        echo "{\"success\":false,\"error\":\"Failed to send message: $error_msg\"}"
-        return 1
+        # Single agent
+        agent_names=("$agent_name_raw")
+        recipients_display="$agent_name_raw"
     fi
+
+    # Send message to all recipients
+    local results="["
+    local first=true
+    local success_count=0
+    local total_count=${#agent_names[@]}
+
+    for agent in "${agent_names[@]}"; do
+        [ -z "$agent" ] && continue
+
+        local result=$(send_to_single_agent "$agent" "$from_agent" "$message" "$recipients_display")
+
+        if [ "$first" = true ]; then
+            first=false
+        else
+            results+=","
+        fi
+
+        results+="$result"
+
+        # Count successes
+        if echo "$result" | grep -q '"success":true'; then
+            ((success_count++))
+        fi
+    done
+
+    results+="]"
+
+    # Build final response
+    if [ "$HAS_JQ" = true ]; then
+        echo "{\"success\":true,\"sent\":$success_count,\"total\":$total_count,\"results\":$results}" | jq -c .
+    else
+        echo "{\"success\":true,\"sent\":$success_count,\"total\":$total_count,\"results\":$results}"
+    fi
+
+    return 0
 }
 
 # Start the MCP server

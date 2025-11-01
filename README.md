@@ -6,6 +6,7 @@ CM (Codex Manager) - MCP Server for managing and communicating with AI agent ter
 
 - **List Agent Terminals**: Find all Terminal windows running AI agents (codex, aider, gemini, qwen, iflow, etc.)
 - **Send Messages with Source Identity**: Send messages to agent terminals with clear sender identification
+- **Group Chat Support**: Send messages to multiple agents simultaneously (broadcast)
 - **Natural Conversation Flow**: Agents know who's talking to them and can reply accordingly
 - **AppleScript Integration**: Native macOS Terminal control
 
@@ -39,8 +40,9 @@ Find all terminals running AI agents.
 ```
 
 ### 2. `send_to_agent`
-Send messages to specific agents with sender identification.
+Send messages to one or more agents with sender identification.
 
+**Single recipient (unicast):**
 ```javascript
 {
   "from": "claude",        // sender name (optional, defaults to "unknown")
@@ -49,21 +51,47 @@ Send messages to specific agents with sender identification.
 }
 ```
 
+**Multiple recipients (group chat):**
+```javascript
+{
+  "from": "claude",
+  "agentName": ["codex", "gemini", "qwen"],  // array of agents
+  "message": "Everyone, what do you think about this architecture?"
+}
+```
+
 **Message Format in Terminal:**
+
+Single recipient:
 ```
 [claude → codex]: Can you help review this code?
 ```
 
-The receiving agent sees who sent the message and can reply:
+Group chat:
+```
+[claude → codex,gemini,qwen]: Everyone, what do you think about this architecture?
+```
+
+The receiving agent sees who sent the message and all recipients. They can reply to sender or the group:
 ```javascript
 {
   "from": "codex",
-  "agentName": "claude",
-  "message": "Sure! The code looks good, just one suggestion..."
+  "agentName": "claude",  // reply to sender only
+  "message": "I think it's solid!"
 }
 ```
 
-## Example: Multi-Agent Conversation
+```javascript
+{
+  "from": "codex",
+  "agentName": ["claude", "gemini", "qwen"],  // reply to group
+  "message": "I agree with the approach, what do others think?"
+}
+```
+
+## Examples
+
+### Example 1: One-on-One Conversation
 
 **Claude to Codex:**
 ```
@@ -83,6 +111,33 @@ The receiving agent sees who sent the message and can reply:
 **Gemini to Claude:**
 ```
 [gemini → claude]: 同意！而且可以考虑用 NumPy 进一步优化
+```
+
+### Example 2: Group Discussion
+
+**Claude broadcasts to all:**
+```
+[claude → codex,gemini,qwen]: 我在设计一个分布式系统架构，大家有什么建议？
+```
+
+**Codex replies to group:**
+```
+[codex → claude,gemini,qwen]: 建议使用微服务架构，考虑 gRPC 作为通信协议
+```
+
+**Gemini replies to group:**
+```
+[gemini → claude,codex,qwen]: 同意微服务，但要注意服务发现和负载均衡
+```
+
+**Qwen replies to group:**
+```
+[qwen → claude,codex,gemini]: 可以用 Kubernetes + Istio 来管理，还需要考虑数据一致性
+```
+
+**Claude to all:**
+```
+[claude → codex,gemini,qwen]: 很好的建议！那我们从服务划分开始讨论？
 ```
 
 ## Requirements

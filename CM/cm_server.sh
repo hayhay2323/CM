@@ -219,11 +219,13 @@ tool_send_to_agent() {
 
     # Parse arguments from JSON
     local agent_name=""
+    local from_agent=""
     local message=""
     local window_id=""
 
     if [ "$HAS_JQ" = true ]; then
         agent_name=$(echo "$args" | jq -r '.agentName // ""')
+        from_agent=$(echo "$args" | jq -r '.from // "unknown"')
         message=$(echo "$args" | jq -r '.message // ""')
         window_id=$(echo "$args" | jq -r '.windowId // ""')
     else
@@ -273,8 +275,11 @@ tool_send_to_agent() {
         fi
     fi
 
+    # Format message with source information
+    local formatted_message="[${from_agent} → ${agent_name}]: ${message}"
+
     # Send the message to the Terminal window
-    local result=$(send_text_to_terminal "$window_id" "$message")
+    local result=$(send_text_to_terminal "$window_id" "$formatted_message")
 
     if echo "$result" | grep -q "success"; then
         echo "{\"success\":true,\"windowId\":$window_id,\"message\":\"Message sent to agent: $agent_name\"}"

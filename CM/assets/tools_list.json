@@ -18,10 +18,14 @@
     },
     {
       "name": "send_to_agent",
-      "description": "将消息发送到指定 agent 的 Terminal 输入框",
+      "description": "将消息发送到指定 agent 的 Terminal 输入框。消息会显示为 [from → to]: message 格式，让接收者知道消息来源",
       "inputSchema": {
         "type": "object",
         "properties": {
+          "from": {
+            "type": "string",
+            "description": "发送者的名称（如 claude、codex、gemini 等）。如果不提供，默认显示为 'unknown'"
+          },
           "agentName": {
             "type": "string",
             "description": "目标 agent 的名称（如 codex、gemini、qwen、iflow 等）"

@@ -4,7 +4,10 @@
     "tools": {
       "listChanged": true
     },
-    "resources": {},
+    "resources": {
+      "subscribe": false,
+      "listChanged": false
+    },
     "sampling": {}
   },
   "serverInfo": {

@@ -89,6 +89,46 @@ The receiving agent sees who sent the message and all recipients. They can reply
 }
 ```
 
+### 3. `resources/read` - Query Conversation History
+
+CM automatically records all messages sent through `send_to_agent`. Agents can query conversation history using Resources API.
+
+**Query recent messages:**
+```javascript
+{
+  "uri": "conversation://latest/50"  // Get last 50 messages
+}
+```
+
+**Query messages with a specific agent:**
+```javascript
+{
+  "uri": "conversation://with/codex"  // All messages involving codex
+}
+```
+
+**Search messages by keyword:**
+```javascript
+{
+  "uri": "conversation://search?q=architecture"  // Search for "architecture"
+}
+```
+
+**Response format:**
+```
+2025-11-02T12:00:00Z [claude → codex]: Help me optimize this code
+2025-11-02T12:01:00Z [codex → claude]: Use list comprehension instead of loops
+2025-11-02T12:05:00Z [claude → gemini,qwen]: Codex suggested list comprehension, thoughts?
+```
+
+**Storage:**
+- Messages are stored in `CM/conversations/history.jsonl`
+- Format: `{timestamp, from, to, message}` - simple and universal
+- Agents decide how to use the history (learning, context, analysis)
+
+**Philosophy:**
+CM is just a "dumb pipe" - it records and retrieves messages without understanding their content. The intelligence is in the agents.
+
 ## Examples
 
 ### Example 1: One-on-One Conversation

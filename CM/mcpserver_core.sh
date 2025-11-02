@@ -120,6 +120,67 @@ handle_tools_call() {
     create_response "$id" "$result" ""
 }
 
+# Function to handle resources/list
+handle_resources_list() {
+    local id="$1"
+
+    local result='{
+        "resources": [
+            {
+                "uri": "conversation://latest/{N}",
+                "name": "Recent Messages",
+                "description": "最近N条消息"
+            },
+            {
+                "uri": "conversation://with/{agent}",
+                "name": "Agent Messages",
+                "description": "与特定agent相关的消息"
+            },
+            {
+                "uri": "conversation://search?q={query}",
+                "name": "Search Messages",
+                "description": "搜索消息内容"
+            }
+        ]
+    }'
+
+    create_response "$id" "$result" ""
+}
+
+# Function to handle resources/read
+handle_resources_read() {
+    local id="$1"
+    local params="$2"
+    local uri=$(echo "$params" | jq -r '.uri')
+
+    # Call the specific resource read function from main script if it exists
+    if type "tool_resources_read" &>/dev/null; then
+        local content=$(tool_resources_read "$params")
+
+        # Check if we got an error
+        if [[ $? -ne 0 ]]; then
+            create_error_response "$id" -32002 "Resource not found: $uri"
+            return
+        fi
+
+        # Escape the content for JSON
+        local stringified=$(echo "$content" | jq -R -s '.')
+
+        # Build the response
+        local result="{
+            \"contents\": [{
+                \"uri\": \"$uri\",
+                \"mimeType\": \"text/plain\",
+                \"text\": $stringified
+            }]
+        }"
+
+        create_response "$id" "$result" ""
+    else
+        create_error_response "$id" -32601 "Resources not supported"
+    fi
+}
+
 # ==== JSON-RPC 2.0 Handler ====
 
 # Function to create a JSON-RPC 2.0 response
@@ -221,6 +282,12 @@ process_request() {
         ;;
     "tools/call")
         handle_tools_call "$id" "$params"
+        ;;
+    "resources/list")
+        handle_resources_list "$id"
+        ;;
+    "resources/read")
+        handle_resources_read "$id" "$params"
         ;;
     *)
         create_error_response "$id" -32601 "Method not found: $method"

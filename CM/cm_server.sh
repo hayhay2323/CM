@@ -13,6 +13,31 @@ if command -v jq &> /dev/null; then
     HAS_JQ=true
 fi
 
+# Conversation history log file
+CONVERSATION_LOG="$SCRIPT_DIR/conversations/history.jsonl"
+
+# Function: Log conversation to history
+# Args: $1 = from_agent, $2 = to_agents (comma-separated or array display), $3 = message
+log_conversation() {
+    local from="$1"
+    local to="$2"
+    local message="$3"
+
+    # Create conversations directory if it doesn't exist
+    mkdir -p "$(dirname "$CONVERSATION_LOG")"
+
+    # Build JSON entry
+    local entry=$(jq -n \
+        --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        --arg from "$from" \
+        --arg to "$to" \
+        --arg msg "$message" \
+        '{timestamp: $ts, from: $from, to: ($to|split(",")), message: $msg}')
+
+    # Append to log file
+    echo "$entry" >> "$CONVERSATION_LOG"
+}
+
 # Function: Get all Terminal windows with their TTY information
 # Returns: Tab-separated list of: windowId<TAB>windowName<TAB>tty
 get_terminal_windows() {
@@ -344,6 +369,11 @@ tool_send_to_agent() {
 
     results+="]"
 
+    # Log conversation if at least one message was sent successfully
+    if [ $success_count -gt 0 ]; then
+        log_conversation "$from_agent" "$recipients_display" "$message"
+    fi
+
     # Build final response
     if [ "$HAS_JQ" = true ]; then
         echo "{\"success\":true,\"sent\":$success_count,\"total\":$total_count,\"results\":$results}" | jq -c .
@@ -352,6 +382,50 @@ tool_send_to_agent() {
     fi
 
     return 0
+}
+
+# Main tool function: resources_read
+# Args: $1 = JSON arguments from MCP client
+tool_resources_read() {
+    local args="$1"
+    local uri=$(echo "$args" | jq -r '.uri')
+
+    # Check if conversation log exists
+    if [[ ! -f "$CONVERSATION_LOG" ]]; then
+        echo ""
+        return 0
+    fi
+
+    case "$uri" in
+        conversation://latest/*)
+            # Get last N messages
+            local limit="${uri##*/}"
+            tail -n "$limit" "$CONVERSATION_LOG" | jq -s -r '
+                map("\(.timestamp) [\(.from) → \(.to|join(","))]: \(.message)") | .[]'
+            ;;
+        conversation://with/*)
+            # Get messages related to a specific agent
+            local agent="${uri##*/}"
+            jq -s --arg agent "$agent" '
+                map(select(.from == $agent or (.to | index($agent))))
+                | map("\(.timestamp) [\(.from) → \(.to|join(","))]: \(.message)") | .[]
+            ' "$CONVERSATION_LOG"
+            ;;
+        conversation://search*)
+            # Search messages by keyword
+            local query=$(echo "$uri" | sed -n 's/.*q=\([^&]*\).*/\1/p')
+            if [ -z "$query" ]; then
+                echo '{"error":"Missing query parameter"}'
+                return 1
+            fi
+            grep -i "$query" "$CONVERSATION_LOG" | jq -s -r '
+                map("\(.timestamp) [\(.from) → \(.to|join(","))]: \(.message)") | .[]'
+            ;;
+        *)
+            echo "{\"error\":\"Unsupported URI: $uri\"}"
+            return 1
+            ;;
+    esac
 }
 
 # Start the MCP server

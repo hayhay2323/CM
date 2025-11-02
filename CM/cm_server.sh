@@ -26,8 +26,8 @@ log_conversation() {
     # Create conversations directory if it doesn't exist
     mkdir -p "$(dirname "$CONVERSATION_LOG")"
 
-    # Build JSON entry
-    local entry=$(jq -n \
+    # Build JSON entry (compact format for JSONL)
+    local entry=$(jq -nc \
         --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
         --arg from "$from" \
         --arg to "$to" \

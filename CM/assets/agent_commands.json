@@ -19,16 +19,48 @@
         "description": "创建 git commit"
       },
       {
-        "name": "/diff",
-        "description": "显示当前更改的 diff"
+        "name": "/approvals",
+        "description": "choose what Codex can do without approval"
+      },
+      {
+        "name": "/review",
+        "description": "review my current changes and find issues"
+      },
+      {
+        "name": "/new",
+        "description": "start a new chat during a conversation"
+      },
+      {
+        "name": "/init",
+        "description": "create an AGENTS.md file with instructions for Codex"
+      },
+      {
+        "name": "/compact",
+        "description": "summarize conversation to prevent hitting the context limit"
       },
       {
         "name": "/undo",
-        "description": "撤销最后一次编辑"
+        "description": "ask Codex to undo a turn"
+      },
+      {
+        "name": "/diff",
+        "description": "show git diff (including untracked files)"
+      },
+      {
+        "name": "/mention",
+        "description": "mention a file (or use @ to review specific files)"
+      },
+      {
+        "name": "/status",
+        "description": "Shows information about the current model and context usage"
+      },
+      {
+        "name": "/model",
+        "description": "Allows changing the AI model or reasoning level"
       },
       {
         "name": "/clear",
-        "description": "清除对话历史"
+        "description": "Clears conversation history"
       },
       {
         "name": "/exit",
@@ -41,53 +73,221 @@
     "commands": [
       {
         "name": "/help",
-        "description": "显示帮助信息"
+        "description": "Get usage help"
+      },
+      {
+        "name": "/add-dir",
+        "description": "Add additional working directories"
+      },
+      {
+        "name": "/agents",
+        "description": "Manage custom AI subagents for specialized tasks"
+      },
+      {
+        "name": "/bug",
+        "description": "Report bugs (sends conversation to Anthropic)"
       },
       {
         "name": "/clear",
-        "description": "清除对话历史"
+        "description": "Clear conversation history"
+      },
+      {
+        "name": "/compact [instructions]",
+        "description": "Compact conversation with optional focus instructions"
+      },
+      {
+        "name": "/config",
+        "description": "Open the Settings interface (Config tab)"
+      },
+      {
+        "name": "/cost",
+        "description": "Show token usage statistics"
+      },
+      {
+        "name": "/doctor",
+        "description": "Checks the health of your Claude Code installation"
+      },
+      {
+        "name": "/init",
+        "description": "Initialize project with CLAUDE.md guide"
+      },
+      {
+        "name": "/login",
+        "description": "Switch Anthropic accounts"
+      },
+      {
+        "name": "/logout",
+        "description": "Sign out from your Anthropic account"
+      },
+      {
+        "name": "/mcp",
+        "description": "Manage MCP server connections and OAuth authentication"
+      },
+      {
+        "name": "/memory",
+        "description": "Edit CLAUDE.md memory files"
       },
       {
         "name": "/model",
-        "description": "切换 AI 模型"
+        "description": "Select or change the AI model"
       },
       {
-        "name": "/exit",
-        "description": "退出 Claude"
+        "name": "/permissions",
+        "description": "View or update permissions"
+      },
+      {
+        "name": "/pr_comments",
+        "description": "View pull request comments"
+      },
+      {
+        "name": "/review",
+        "description": "Request code review"
+      },
+      {
+        "name": "/sandbox",
+        "description": "Enable sandboxed bash tool with filesystem and network isolation"
+      },
+      {
+        "name": "/rewind",
+        "description": "Rewind the conversation and/or code"
+      },
+      {
+        "name": "/status",
+        "description": "Open the Settings interface (Status tab)"
+      },
+      {
+        "name": "/terminal-setup",
+        "description": "Install Shift+Enter key binding for newlines (iTerm2 and VSCode only)"
+      },
+      {
+        "name": "/usage",
+        "description": "Show plan usage limits and rate limit status"
+      },
+      {
+        "name": "/vim",
+        "description": "Enter vim mode for alternating insert and command modes"
       }
     ]
   },
   "gemini": {
-    "description": "Google Gemini - AI assistant",
+    "description": "Google Gemini - AI coding assistant",
     "commands": [
       {
         "name": "/help",
-        "description": "显示帮助信息"
+        "description": "Displays available commands and usage (or use /?)"
+      },
+      {
+        "name": "/about",
+        "description": "Displays version information"
+      },
+      {
+        "name": "/auth",
+        "description": "Configures authentication methods"
+      },
+      {
+        "name": "/chat",
+        "description": "Manages conversation history (save, resume, list, delete, share)"
       },
       {
         "name": "/clear",
-        "description": "清除对话历史"
+        "description": "Clears the terminal screen"
       },
       {
-        "name": "/exit",
-        "description": "退出 Gemini"
+        "name": "/compress",
+        "description": "Replaces the current chat context with a summary"
+      },
+      {
+        "name": "/ide",
+        "description": "Manages integration with your IDE"
+      },
+      {
+        "name": "/init",
+        "description": "Initializes a project"
+      },
+      {
+        "name": "/memory",
+        "description": "Manages the AI's instructional context from GEMINI.md files"
+      },
+      {
+        "name": "/mcp",
+        "description": "Manages Model Context Protocol servers"
+      },
+      {
+        "name": "/quit",
+        "description": "Exits the application"
+      },
+      {
+        "name": "/restore",
+        "description": "Undoes file changes made by tools"
+      },
+      {
+        "name": "/settings",
+        "description": "Opens an editor for settings.json"
+      },
+      {
+        "name": "/stats",
+        "description": "Shows token usage and session duration"
+      },
+      {
+        "name": "/theme",
+        "description": "Changes the visual appearance of the CLI"
+      },
+      {
+        "name": "/tools",
+        "description": "Lists available tools"
+      },
+      {
+        "name": "/vim",
+        "description": "Toggles Vim mode for input editing"
       }
     ]
   },
   "qwen": {
-    "description": "Alibaba Qwen - AI assistant",
+    "description": "Alibaba Qwen Code - AI coding assistant based on Qwen models",
     "commands": [
       {
         "name": "/help",
-        "description": "显示帮助信息"
+        "description": "Displays help information about Qwen Code"
+      },
+      {
+        "name": "/analyze",
+        "description": "Used for analyzing files, directories, or asking general questions"
+      },
+      {
+        "name": "/sandbox",
+        "description": "Provides a safe environment for testing code or scripts"
+      },
+      {
+        "name": "/ping",
+        "description": "Tests the connection to the server"
+      },
+      {
+        "name": "/compress",
+        "description": "Compresses conversation history to manage token limits"
       },
       {
         "name": "/clear",
-        "description": "清除对话历史"
+        "description": "Clears the conversation history and starts a new session"
       },
       {
-        "name": "/exit",
-        "description": "退出 Qwen"
+        "name": "/stats",
+        "description": "Shows current session token usage and limits"
+      },
+      {
+        "name": "/bug",
+        "description": "Used for reporting bugs within the CLI"
+      },
+      {
+        "name": "/mcp",
+        "description": "Checks configured MCP servers and their status"
+      },
+      {
+        "name": "/setup-mcp",
+        "description": "Shows available MCP setup options"
+      },
+      {
+        "name": "/tools",
+        "description": "Lists all available tools, including web search integration"
       }
     ]
   }

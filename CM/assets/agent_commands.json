@@ -1,0 +1,94 @@
+{
+  "codex": {
+    "description": "OpenAI Codex - AI coding assistant",
+    "commands": [
+      {
+        "name": "/help",
+        "description": "显示所有可用命令"
+      },
+      {
+        "name": "/add <files>",
+        "description": "添加文件到上下文"
+      },
+      {
+        "name": "/drop <files>",
+        "description": "从上下文中移除文件"
+      },
+      {
+        "name": "/commit",
+        "description": "创建 git commit"
+      },
+      {
+        "name": "/diff",
+        "description": "显示当前更改的 diff"
+      },
+      {
+        "name": "/undo",
+        "description": "撤销最后一次编辑"
+      },
+      {
+        "name": "/clear",
+        "description": "清除对话历史"
+      },
+      {
+        "name": "/exit",
+        "description": "退出 Codex"
+      }
+    ]
+  },
+  "claude": {
+    "description": "Anthropic Claude Code - AI coding assistant",
+    "commands": [
+      {
+        "name": "/help",
+        "description": "显示帮助信息"
+      },
+      {
+        "name": "/clear",
+        "description": "清除对话历史"
+      },
+      {
+        "name": "/model",
+        "description": "切换 AI 模型"
+      },
+      {
+        "name": "/exit",
+        "description": "退出 Claude"
+      }
+    ]
+  },
+  "gemini": {
+    "description": "Google Gemini - AI assistant",
+    "commands": [
+      {
+        "name": "/help",
+        "description": "显示帮助信息"
+      },
+      {
+        "name": "/clear",
+        "description": "清除对话历史"
+      },
+      {
+        "name": "/exit",
+        "description": "退出 Gemini"
+      }
+    ]
+  },
+  "qwen": {
+    "description": "Alibaba Qwen - AI assistant",
+    "commands": [
+      {
+        "name": "/help",
+        "description": "显示帮助信息"
+      },
+      {
+        "name": "/clear",
+        "description": "清除对话历史"
+      },
+      {
+        "name": "/exit",
+        "description": "退出 Qwen"
+      }
+    ]
+  }
+}

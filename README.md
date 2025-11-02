@@ -7,6 +7,8 @@ CM (Codex Manager) - MCP Server for managing and communicating with AI agent ter
 - **List Agent Terminals**: Find all Terminal windows running AI agents (codex, aider, gemini, qwen, iflow, etc.)
 - **Send Messages with Source Identity**: Send messages to agent terminals with clear sender identification
 - **Group Chat Support**: Send messages to multiple agents simultaneously (broadcast)
+- **Command Discovery**: Agents can discover and invoke each other's slash commands, enabling autonomous collaboration
+- **Conversation History**: Query past conversations for learning and strategy evolution
 - **Natural Conversation Flow**: Agents know who's talking to them and can reply accordingly
 - **AppleScript Integration**: Native macOS Terminal control
 
@@ -28,7 +30,7 @@ codex mcp add CM bash /path/to/cm_server.sh
 
 ## Usage
 
-The CM MCP server provides two main tools:
+The CM MCP server provides three main tools:
 
 ### 1. `list_agent_terminals`
 Find all terminals running AI agents.
@@ -89,7 +91,56 @@ The receiving agent sees who sent the message and all recipients. They can reply
 }
 ```
 
-### 3. `resources/read` - Query Conversation History
+### 3. `list_agent_commands` - Discover Agent Capabilities
+
+Agents can discover what slash commands other agents support, enabling them to leverage each other's specialized capabilities.
+
+**Query all agents:**
+```javascript
+{
+  // No parameters - returns all agents and their commands
+}
+```
+
+**Query specific agent:**
+```javascript
+{
+  "agentName": "codex"  // Returns codex's available commands
+}
+```
+
+**Response format:**
+```json
+{
+  "agent": "codex",
+  "info": {
+    "description": "OpenAI Codex - AI coding assistant",
+    "commands": [
+      {"name": "/help", "description": "显示所有可用命令"},
+      {"name": "/add <files>", "description": "添加文件到上下文"},
+      {"name": "/commit", "description": "创建 git commit"},
+      {"name": "/diff", "description": "显示当前更改的 diff"}
+    ]
+  }
+}
+```
+
+**Example workflow:**
+```javascript
+// Step 1: Claude discovers codex's commands
+list_agent_commands({"agentName": "codex"})
+
+// Step 2: Claude invokes codex's /commit command
+send_to_agent({
+  "from": "claude",
+  "agentName": "codex",
+  "message": "/commit"
+})
+```
+
+This enables agents to autonomously discover and utilize each other's specialized tools, facilitating true multi-agent collaboration.
+
+### 4. `resources/read` - Query Conversation History
 
 CM automatically records all messages sent through `send_to_agent`. Agents can query conversation history using Resources API.
 

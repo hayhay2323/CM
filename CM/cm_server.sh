@@ -386,6 +386,44 @@ tool_send_to_agent() {
     return 0
 }
 
+# Main tool function: list_agent_commands
+# Args: $1 = JSON arguments from MCP client
+tool_list_agent_commands() {
+    local args="$1"
+
+    # Path to agent commands configuration
+    local commands_file="$SCRIPT_DIR/assets/agent_commands.json"
+
+    # Check if commands file exists
+    if [[ ! -f "$commands_file" ]]; then
+        echo '{"error":"Agent commands configuration not found"}'
+        return 1
+    fi
+
+    # Parse agentName from args (optional)
+    local agent_name=""
+    if [ "$HAS_JQ" = true ] && [ -n "$args" ] && [ "$args" != "{}" ]; then
+        agent_name=$(echo "$args" | jq -r '.agentName // ""')
+    fi
+
+    if [ -n "$agent_name" ] && [ "$agent_name" != "null" ]; then
+        # Return commands for specific agent
+        local agent_data=$(jq --arg agent "$agent_name" '.[$agent] // null' "$commands_file")
+
+        if [ "$agent_data" = "null" ] || [ -z "$agent_data" ]; then
+            echo "{\"error\":\"Agent not found: $agent_name\"}"
+            return 1
+        fi
+
+        echo "{\"agent\":\"$agent_name\",\"info\":$agent_data}" | jq -c .
+    else
+        # Return all agents and their commands
+        jq -c '{agents: .}' "$commands_file"
+    fi
+
+    return 0
+}
+
 # Main tool function: resources_read
 # Args: $1 = JSON arguments from MCP client
 tool_resources_read() {

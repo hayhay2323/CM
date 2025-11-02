@@ -49,6 +49,19 @@
         },
         "required": ["agentName", "message"]
       }
+    },
+    {
+      "name": "list_agent_commands",
+      "description": "列出 agent 的可用命令（斜杠命令）。Agents 可以使用此工具发现其他 agents 的能力，然后通过 send_to_agent 调用这些命令。例如：先查询 codex 的命令列表，然后发送 '/commit' 让 codex 创建 commit",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agentName": {
+            "type": "string",
+            "description": "要查询命令的 agent 名称（如 'codex', 'claude', 'gemini', 'qwen'）。如果不提供，返回所有 agents 的命令列表"
+          }
+        }
+      }
     }
   ]
 }

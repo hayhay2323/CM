@@ -62,6 +62,51 @@
           }
         }
       }
+    },
+    {
+      "name": "get_collaboration_stats",
+      "description": "获取协作统计数据，帮助 agents 了解协作模式和效果。可以查询整体统计或特定 agent 的统计。包括：消息数量、最常协作的 agents、最常用的命令、近期活动等。Agents 可以用此分析哪些协作模式有效，优化任务分配",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agentName": {
+            "type": "string",
+            "description": "要查询统计的 agent 名称。如果不提供，返回所有 agents 的整体统计"
+          }
+        }
+      }
+    },
+    {
+      "name": "register_commands",
+      "description": "允许 agent 动态注册自己的命令。注册后的命令会自动出现在 list_agent_commands 的结果中，其他 agents 就能发现并调用。动态命令会覆盖静态配置的同名命令。这消除了手动维护 agent_commands.json 的负担，让 agents 自主管理自己的能力",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agentName": {
+            "type": "string",
+            "description": "注册命令的 agent 名称（如 'codex', 'claude', 'gemini', 'qwen'）"
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "命令名称（如 '/analyze', '/review'）"
+                },
+                "description": {
+                  "type": "string",
+                  "description": "命令功能描述"
+                }
+              },
+              "required": ["name", "description"]
+            },
+            "description": "要注册的命令列表"
+          }
+        },
+        "required": ["agentName", "commands"]
+      }
     }
   ]
 }

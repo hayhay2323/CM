@@ -130,6 +130,57 @@ end tell
 EOF
 }
 
+# Function: Get agent status based on recent activity
+# Args: $1 = agent name
+# Returns: "busy" if active within 5 minutes, "idle" if active within 30 minutes, "online" otherwise
+get_agent_status() {
+    local agent_name="$1"
+
+    # If no conversation log exists, default to online
+    if [[ ! -f "$CONVERSATION_LOG" ]]; then
+        echo "online"
+        return 0
+    fi
+
+    # Get the last message from or to this agent
+    local last_activity=$(jq -s -r --arg agent "$agent_name" '
+        map(select(.from == $agent or (.to | index($agent))))
+        | last
+        | .timestamp // ""
+    ' "$CONVERSATION_LOG" 2>/dev/null)
+
+    if [ -z "$last_activity" ] || [ "$last_activity" = "null" ]; then
+        echo "online"
+        return 0
+    fi
+
+    # Calculate time difference in seconds
+    # Convert ISO 8601 timestamp to epoch seconds
+    if date --version &>/dev/null 2>&1; then
+        # GNU date
+        local last_epoch=$(date -d "$last_activity" +%s 2>/dev/null || echo 0)
+        local now_epoch=$(date +%s)
+    else
+        # BSD date (macOS)
+        local last_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%S" "${last_activity:0:19}" +%s 2>/dev/null || echo 0)
+        local now_epoch=$(date +%s)
+    fi
+
+    local diff=$((now_epoch - last_epoch))
+
+    # Determine status based on time since last activity
+    if [ $diff -lt 300 ]; then
+        # Active within last 5 minutes
+        echo "busy"
+    elif [ $diff -lt 1800 ]; then
+        # Active within last 30 minutes
+        echo "idle"
+    else
+        # No recent activity
+        echo "online"
+    fi
+}
+
 # Main tool function: list_agent_terminals
 # Args: $1 = JSON arguments from MCP client
 tool_list_agent_terminals() {
@@ -208,6 +259,9 @@ tool_list_agent_terminals() {
                 fi
             fi
 
+            # Get agent status based on recent activity
+            local agent_status=$(get_agent_status "$agent_name")
+
             # Escape special characters in strings for JSON
             window_name=$(echo "$window_name" | sed 's/"/\\"/g' | sed "s/'/\\'/g")
             full_command=$(echo "$full_command" | sed 's/"/\\"/g' | sed 's/\\/\\\\/g')
@@ -219,7 +273,7 @@ tool_list_agent_terminals() {
                 results+=","
             fi
 
-            results+="{\"windowId\":$window_id,\"windowName\":\"$window_name\",\"tty\":\"$tty\",\"agent\":{\"pid\":$pid,\"name\":\"$agent_name\",\"command\":\"$full_command\"}}"
+            results+="{\"windowId\":$window_id,\"windowName\":\"$window_name\",\"tty\":\"$tty\",\"agent\":{\"pid\":$pid,\"name\":\"$agent_name\",\"command\":\"$full_command\",\"status\":\"$agent_status\"}}"
         fi
     done <<< "$windows"
 
@@ -386,18 +440,72 @@ tool_send_to_agent() {
     return 0
 }
 
+# Main tool function: register_commands
+# Args: $1 = JSON arguments from MCP client
+tool_register_commands() {
+    local args="$1"
+
+    # Path to dynamic commands file
+    local dynamic_file="$SCRIPT_DIR/assets/agent_commands_dynamic.json"
+
+    # Parse arguments
+    if [ "$HAS_JQ" != true ]; then
+        echo '{"success":false,"error":"jq is required for this tool"}'
+        return 1
+    fi
+
+    local agent_name=$(echo "$args" | jq -r '.agentName // ""')
+    local commands=$(echo "$args" | jq -c '.commands // []')
+
+    # Validate required parameters
+    if [ -z "$agent_name" ] || [ "$agent_name" = "null" ]; then
+        echo '{"success":false,"error":"agentName is required"}'
+        return 1
+    fi
+
+    if [ "$commands" = "[]" ] || [ "$commands" = "null" ]; then
+        echo '{"success":false,"error":"commands array is required"}'
+        return 1
+    fi
+
+    # Create or load dynamic commands file
+    if [[ ! -f "$dynamic_file" ]]; then
+        echo '{}' > "$dynamic_file"
+    fi
+
+    # Update dynamic commands
+    local updated=$(jq --arg agent "$agent_name" --argjson cmds "$commands" \
+        '.[$agent] = {description: ("Dynamically registered commands for " + $agent), commands: $cmds}' \
+        "$dynamic_file")
+
+    echo "$updated" > "$dynamic_file"
+
+    echo "{\"success\":true,\"agent\":\"$agent_name\",\"commandsRegistered\":$(echo "$commands" | jq 'length')}" | jq -c .
+    return 0
+}
+
 # Main tool function: list_agent_commands
 # Args: $1 = JSON arguments from MCP client
 tool_list_agent_commands() {
     local args="$1"
 
-    # Path to agent commands configuration
-    local commands_file="$SCRIPT_DIR/assets/agent_commands.json"
+    # Paths to agent commands configurations
+    local static_file="$SCRIPT_DIR/assets/agent_commands.json"
+    local dynamic_file="$SCRIPT_DIR/assets/agent_commands_dynamic.json"
 
-    # Check if commands file exists
-    if [[ ! -f "$commands_file" ]]; then
+    # Check if static commands file exists
+    if [[ ! -f "$static_file" ]]; then
         echo '{"error":"Agent commands configuration not found"}'
         return 1
+    fi
+
+    # Merge static and dynamic commands
+    local merged_commands=""
+    if [[ -f "$dynamic_file" ]]; then
+        # Merge: dynamic commands override static ones
+        merged_commands=$(jq -s '.[0] * .[1]' "$static_file" "$dynamic_file")
+    else
+        merged_commands=$(cat "$static_file")
     fi
 
     # Parse agentName from args (optional)
@@ -408,7 +516,7 @@ tool_list_agent_commands() {
 
     if [ -n "$agent_name" ] && [ "$agent_name" != "null" ]; then
         # Return commands for specific agent
-        local agent_data=$(jq --arg agent "$agent_name" '.[$agent] // null' "$commands_file")
+        local agent_data=$(echo "$merged_commands" | jq --arg agent "$agent_name" '.[$agent] // null')
 
         if [ "$agent_data" = "null" ] || [ -z "$agent_data" ]; then
             echo "{\"error\":\"Agent not found: $agent_name\"}"
@@ -418,7 +526,87 @@ tool_list_agent_commands() {
         echo "{\"agent\":\"$agent_name\",\"info\":$agent_data}" | jq -c .
     else
         # Return all agents and their commands
-        jq -c '{agents: .}' "$commands_file"
+        echo "$merged_commands" | jq -c '{agents: .}'
+    fi
+
+    return 0
+}
+
+# Main tool function: get_collaboration_stats
+# Args: $1 = JSON arguments from MCP client
+tool_get_collaboration_stats() {
+    local args="$1"
+
+    # Check if conversation log exists
+    if [[ ! -f "$CONVERSATION_LOG" ]]; then
+        echo '{"stats":{},"message":"No conversation history available"}'
+        return 0
+    fi
+
+    # Parse optional agentName filter
+    local filter_agent=""
+    if [ "$HAS_JQ" = true ] && [ -n "$args" ] && [ "$args" != "{}" ]; then
+        filter_agent=$(echo "$args" | jq -r '.agentName // ""')
+    fi
+
+    # Build stats using jq
+    if [ -n "$filter_agent" ] && [ "$filter_agent" != "null" ]; then
+        # Stats for specific agent
+        jq -s --arg agent "$filter_agent" '
+            {
+                agent: $agent,
+                messagesSent: (map(select(.from == $agent)) | length),
+                messagesReceived: (map(select(.to | index($agent))) | length),
+                topCollaborators: (
+                    map(select(.from == $agent or (.to | index($agent))))
+                    | map(if .from == $agent then .to[] else .from end)
+                    | map(select(. != $agent))
+                    | group_by(.) | map({agent: .[0], count: length})
+                    | sort_by(-.count) | .[0:5]
+                ),
+                mostUsedCommands: (
+                    map(select(.from == $agent and (.message | startswith("/"))))
+                    | map(.message | split(" ")[0])
+                    | group_by(.) | map({command: .[0], count: length})
+                    | sort_by(-.count) | .[0:10]
+                ),
+                recentActivity: (
+                    map(select(.from == $agent or (.to | index($agent))))
+                    | .[-10:] | map({
+                        timestamp: .timestamp,
+                        from: .from,
+                        to: (.to | join(",")),
+                        isCommand: (.message | startswith("/"))
+                    })
+                )
+            }
+        ' "$CONVERSATION_LOG" | jq -c .
+    else
+        # Overall stats for all agents
+        jq -s '
+            {
+                totalMessages: length,
+                totalAgents: ([.[].from] + ([.[].to] | flatten) | unique | length),
+                messagesByAgent: (
+                    group_by(.from) | map({agent: .[0].from, sent: length})
+                ),
+                mostActiveCollaborations: (
+                    map({pair: ([.from] + .to | sort | join("-")), msg: .})
+                    | group_by(.pair) | map({pair: .[0].pair, count: length})
+                    | sort_by(-.count) | .[0:10]
+                ),
+                commandUsage: (
+                    map(select(.message | startswith("/")))
+                    | map(.message | split(" ")[0])
+                    | group_by(.) | map({command: .[0], count: length})
+                    | sort_by(-.count) | .[0:10]
+                ),
+                timeRange: {
+                    earliest: .[0].timestamp,
+                    latest: .[-1].timestamp
+                }
+            }
+        ' "$CONVERSATION_LOG" | jq -c .
     fi
 
     return 0
@@ -467,6 +655,58 @@ tool_resources_read() {
             query=$(printf '%b' "${query//%/\\x}")
             grep -i "$query" "$CONVERSATION_LOG" 2>/dev/null | jq -s -r '
                 map("\(.timestamp) [\(.from) → \(.to|join(","))]: \(.message)") | .[]' 2>/dev/null || echo ""
+            ;;
+        conversation://between/*/*)
+            # Get conversations between two specific agents
+            # URI format: conversation://between/agent1/agent2
+            local path="${uri##conversation://between/}"
+            local agent1=$(echo "$path" | cut -d'/' -f1)
+            local agent2=$(echo "$path" | cut -d'/' -f2)
+            if [ -z "$agent1" ] || [ -z "$agent2" ]; then
+                echo '{"error":"Both agent names required. Format: conversation://between/agent1/agent2"}'
+                return 1
+            fi
+            jq -s -r --arg a1 "$agent1" --arg a2 "$agent2" '
+                map(select(
+                    (.from == $a1 and (.to | index($a2))) or
+                    (.from == $a2 and (.to | index($a1)))
+                ))
+                | map("\(.timestamp) [\(.from) → \(.to|join(","))]: \(.message)") | .[]
+            ' "$CONVERSATION_LOG" 2>/dev/null || echo ""
+            ;;
+        conversation://time/*/*)
+            # Get conversations within a time range
+            # URI format: conversation://time/start_timestamp/end_timestamp
+            # Timestamps in ISO 8601 format: 2025-01-15T10:00:00
+            local path="${uri##conversation://time/}"
+            local start_time=$(echo "$path" | cut -d'/' -f1)
+            local end_time=$(echo "$path" | cut -d'/' -f2)
+            if [ -z "$start_time" ] || [ -z "$end_time" ]; then
+                echo '{"error":"Both start and end timestamps required. Format: conversation://time/2025-01-15T10:00:00/2025-01-15T12:00:00"}'
+                return 1
+            fi
+            # URL decode timestamps
+            start_time=$(printf '%b' "${start_time//%/\\x}")
+            end_time=$(printf '%b' "${end_time//%/\\x}")
+            jq -s -r --arg start "$start_time" --arg end "$end_time" '
+                map(select(.timestamp >= $start and .timestamp <= $end))
+                | map("\(.timestamp) [\(.from) → \(.to|join(","))]: \(.message)") | .[]
+            ' "$CONVERSATION_LOG" 2>/dev/null || echo ""
+            ;;
+        conversation://pattern/*)
+            # Search messages by regex pattern
+            # URI format: conversation://pattern/regex_pattern
+            local pattern="${uri##conversation://pattern/}"
+            if [ -z "$pattern" ]; then
+                echo '{"error":"Missing pattern parameter"}'
+                return 1
+            fi
+            # URL decode pattern
+            pattern=$(printf '%b' "${pattern//%/\\x}")
+            jq -s -r --arg pattern "$pattern" '
+                map(select(.message | test($pattern; "i")))
+                | map("\(.timestamp) [\(.from) → \(.to|join(","))]: \(.message)") | .[]
+            ' "$CONVERSATION_LOG" 2>/dev/null || echo ""
             ;;
         *)
             echo "{\"error\":\"Unsupported URI: $uri\"}"

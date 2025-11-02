@@ -1,0 +1,15 @@
+{
+  "test_agent": {
+    "description": "Dynamically registered commands for test_agent",
+    "commands": [
+      {
+        "name": "/test",
+        "description": "A test command"
+      },
+      {
+        "name": "/demo",
+        "description": "A demo command"
+      }
+    ]
+  }
+}

@@ -140,6 +140,21 @@ handle_resources_list() {
                 "uri": "conversation://search?q={query}",
                 "name": "Search Messages",
                 "description": "搜索消息内容"
+            },
+            {
+                "uri": "conversation://between/{agent1}/{agent2}",
+                "name": "Between Agents",
+                "description": "两个特定agents之间的对话"
+            },
+            {
+                "uri": "conversation://time/{start}/{end}",
+                "name": "Time Range",
+                "description": "指定时间范围内的消息 (ISO 8601格式)"
+            },
+            {
+                "uri": "conversation://pattern/{regex}",
+                "name": "Pattern Match",
+                "description": "匹配正则表达式的消息"
             }
         ]
     }'

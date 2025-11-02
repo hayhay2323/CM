@@ -22,11 +22,28 @@ log_conversation() {
     local from="$1"
     local to="$2"
     local message="$3"
+    local lockdir="$CONVERSATION_LOG.lock.d"
 
     # Create conversations directory if it doesn't exist
     mkdir -p "$(dirname "$CONVERSATION_LOG")"
 
-    # Build JSON entry (compact format for JSONL)
+    # Use mkdir as atomic lock (works on all Unix systems including macOS)
+    # mkdir is atomic - either succeeds or fails, no race condition
+    local max_attempts=100
+    local attempt=0
+    while ! mkdir "$lockdir" 2>/dev/null; do
+        attempt=$((attempt + 1))
+        if [ $attempt -ge $max_attempts ]; then
+            # Stale lock detected (previous process crashed), force remove
+            rmdir "$lockdir" 2>/dev/null || true
+            mkdir "$lockdir" 2>/dev/null || return 1
+            break
+        fi
+        # Wait 10ms before retry
+        sleep 0.01
+    done
+
+    # Critical section: write to file
     local entry=$(jq -nc \
         --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
         --arg from "$from" \
@@ -34,8 +51,10 @@ log_conversation() {
         --arg msg "$message" \
         '{timestamp: $ts, from: $from, to: ($to|split(",")), message: $msg}')
 
-    # Append to log file
     echo "$entry" >> "$CONVERSATION_LOG"
+
+    # Release lock
+    rmdir "$lockdir" 2>/dev/null || true
 }
 
 # Function: Get all Terminal windows with their TTY information
@@ -468,7 +487,27 @@ tool_register_commands() {
         return 1
     fi
 
-    # Create or load dynamic commands file
+    # Use mkdir as atomic lock (works on all Unix systems including macOS)
+    local lockdir="$dynamic_file.lock.d"
+    local max_attempts=100
+    local attempt=0
+    while ! mkdir "$lockdir" 2>/dev/null; do
+        attempt=$((attempt + 1))
+        if [ $attempt -ge $max_attempts ]; then
+            # Stale lock detected, force remove
+            rmdir "$lockdir" 2>/dev/null || true
+            mkdir "$lockdir" 2>/dev/null || {
+                echo '{"success":false,"error":"Failed to acquire lock after 100 attempts"}'
+                return 1
+            }
+            break
+        fi
+        # Wait 10ms before retry
+        sleep 0.01
+    done
+
+    # Critical section: read-modify-write (protected by lock)
+    # Create or load dynamic commands file (re-check inside lock to avoid TOCTOU)
     if [[ ! -f "$dynamic_file" ]]; then
         echo '{}' > "$dynamic_file"
     fi
@@ -479,6 +518,9 @@ tool_register_commands() {
         "$dynamic_file")
 
     echo "$updated" > "$dynamic_file"
+
+    # Release lock
+    rmdir "$lockdir" 2>/dev/null || true
 
     echo "{\"success\":true,\"agent\":\"$agent_name\",\"commandsRegistered\":$(echo "$commands" | jq 'length')}" | jq -c .
     return 0

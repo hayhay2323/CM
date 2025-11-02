@@ -333,8 +333,10 @@ tool_send_to_agent() {
     local recipients_display=""
 
     if [[ "$agent_name_raw" == "["* ]]; then
-        # Array of agents (group chat)
-        mapfile -t agent_names < <(echo "$agent_name_raw" | jq -r '.[]')
+        # Array of agents (group chat) - use portable method instead of mapfile
+        while IFS= read -r agent; do
+            [ -n "$agent" ] && agent_names+=("$agent")
+        done < <(echo "$agent_name_raw" | jq -r '.[]')
         recipients_display=$(echo "$agent_name_raw" | jq -r 'join(",")')
     else
         # Single agent
@@ -400,26 +402,33 @@ tool_resources_read() {
         conversation://latest/*)
             # Get last N messages
             local limit="${uri##*/}"
-            tail -n "$limit" "$CONVERSATION_LOG" | jq -s -r '
-                map("\(.timestamp) [\(.from) → \(.to|join(","))]: \(.message)") | .[]'
+            # Validate limit is a positive integer
+            if ! [[ "$limit" =~ ^[0-9]+$ ]]; then
+                echo "{\"error\":\"Invalid limit parameter: must be a positive integer\"}"
+                return 1
+            fi
+            tail -n "$limit" "$CONVERSATION_LOG" 2>/dev/null | jq -s -r '
+                map("\(.timestamp) [\(.from) → \(.to|join(","))]: \(.message)") | .[]' 2>/dev/null || echo ""
             ;;
         conversation://with/*)
             # Get messages related to a specific agent
             local agent="${uri##*/}"
-            jq -s --arg agent "$agent" '
+            jq -s -r --arg agent "$agent" '
                 map(select(.from == $agent or (.to | index($agent))))
                 | map("\(.timestamp) [\(.from) → \(.to|join(","))]: \(.message)") | .[]
-            ' "$CONVERSATION_LOG"
+            ' "$CONVERSATION_LOG" 2>/dev/null || echo ""
             ;;
         conversation://search*)
-            # Search messages by keyword
+            # Search messages by keyword (with URL decoding support)
             local query=$(echo "$uri" | sed -n 's/.*q=\([^&]*\).*/\1/p')
             if [ -z "$query" ]; then
                 echo '{"error":"Missing query parameter"}'
                 return 1
             fi
-            grep -i "$query" "$CONVERSATION_LOG" | jq -s -r '
-                map("\(.timestamp) [\(.from) → \(.to|join(","))]: \(.message)") | .[]'
+            # Basic URL decode for common characters
+            query=$(printf '%b' "${query//%/\\x}")
+            grep -i "$query" "$CONVERSATION_LOG" 2>/dev/null | jq -s -r '
+                map("\(.timestamp) [\(.from) → \(.to|join(","))]: \(.message)") | .[]' 2>/dev/null || echo ""
             ;;
         *)
             echo "{\"error\":\"Unsupported URI: $uri\"}"
